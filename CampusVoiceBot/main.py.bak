@@ -1,0 +1,272 @@
+import tkinter as tk
+from tkinter import font, ttk
+import pyttsx3
+import speech_recognition as sr
+import mysql.connector
+from PIL import Image, ImageTk, ImageSequence
+import cv2
+
+# --- Constants for UI Styling ---
+THEMES = {
+    "light": {
+        "font_family": "Helvetica",
+        "font_sizes": {"title": 18, "body": 12, "button": 14},
+        "colors": {
+            "primary": "#4CAF50",
+            "primary_hover": "#45a049",
+            "text": "#333",
+            "background": "#ECECEC",
+            "frame_bg": ("#FFFFFF", "#F0F0F0"),
+        },
+        "padding": {"outer_padx": 20, "outer_pady": 20, "inner_pady": 10},
+    },
+    "dark": {
+        "font_family": "Helvetica",
+        "font_sizes": {"title": 18, "body": 12, "button": 14},
+        "colors": {
+            "primary": "#66BB6A",
+            "primary_hover": "#81C784",
+            "text": "#E0E0E0",
+            "background": "#212121",
+            "frame_bg": ("#424242", "#303030"),
+        },
+        "padding": {"outer_padx": 20, "outer_pady": 20, "inner_pady": 10},
+    },
+}
+
+# --- Theme Manager ---
+class ThemeManager:
+    def __init__(self, root):
+        self.root = root
+        self.theme = "light"
+        self.style = ttk.Style()
+        self.ui_elements = []
+
+    def toggle_theme(self):
+        self.theme = "dark" if self.theme == "light" else "light"
+        self.apply_theme()
+
+    def apply_theme(self):
+        theme_config = THEMES[self.theme]
+        self.root.config(bg=theme_config["colors"]["background"])
+
+        self.style.configure(
+            "TButton",
+            font=(theme_config["font_family"], theme_config["font_sizes"]["button"], "bold"),
+            background=theme_config["colors"]["primary"],
+            foreground="white",
+        )
+        self.style.map(
+            "TButton",
+            background=[("active", theme_config["colors"]["primary_hover"])],
+        )
+
+        for elem, elem_type in self.ui_elements:
+            if elem_type == "frame":
+                elem.config(bg=theme_config["colors"]["frame_bg"][0])
+            elif elem_type == "label":
+                elem.config(
+                    bg=theme_config["colors"]["frame_bg"][0],
+                    fg=theme_config["colors"]["text"],
+                )
+
+    def register(self, element, element_type):
+        self.ui_elements.append((element, element_type))
+
+# --- Animated GIF & Video Player ---
+class AnimatedGIF:
+    def __init__(self, label, gif_path):
+        self.label = label
+        self.gif_path = gif_path
+        self.frames = []
+        self.frame_index = 0
+        self.load_frames()
+
+    def load_frames(self):
+        gif = Image.open(self.gif_path)
+        for frame in ImageSequence.Iterator(gif):
+            frame_image = ImageTk.PhotoImage(frame)
+            self.frames.append(frame_image)
+
+    def animate(self):
+        if self.frames:
+            frame = self.frames[self.frame_index]
+            self.label.config(image=frame)
+            self.frame_index = (self.frame_index + 1) % len(self.frames)
+            self.label.master.after(100, self.animate)
+
+    def start_animation(self):
+        self.animate()
+
+class VideoPlayer:
+    def __init__(self, label, video_path):
+        self.label = label
+        self.video_path = video_path
+        self.cap = None
+        self.playing = False
+
+    def play(self):
+        self.cap = cv2.VideoCapture(self.video_path)
+        self.playing = True
+        self.show_frame()
+
+    def show_frame(self):
+        if not self.playing:
+            return
+
+        ret, frame = self.cap.read()
+        if not ret:
+            self.stop()
+            return
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_image = Image.fromarray(frame)
+        frame_image = ImageTk.PhotoImage(frame_image)
+        
+        self.label.config(image=frame_image)
+        self.label.image = frame_image
+        
+        self.label.master.after(15, self.show_frame)
+
+    def stop(self):
+        if self.cap:
+            self.cap.release()
+        self.playing = False
+        self.label.config(image="")
+
+# --- UI Helper Functions ---
+def setup_main_window(root, theme_manager):
+    root.title("Campus Voice Assistant")
+    root.geometry("700x600")
+    theme_manager.apply_theme()
+
+def create_content_frame(root, theme_manager):
+    padding = THEMES[theme_manager.theme]["padding"]
+    frame = tk.Frame(
+        root,
+        bd=10,
+        relief="solid",
+        padx=padding["outer_padx"],
+        pady=padding["outer_pady"],
+    )
+    frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.9, relheight=0.7)
+    theme_manager.register(frame, "frame")
+    return frame
+
+def create_status_label(parent, theme_manager):
+    theme_config = THEMES[theme_manager.theme]
+    label_font = font.Font(
+        family=theme_config["font_family"],
+        size=theme_config["font_sizes"]["title"],
+        weight="bold",
+    )
+    label = tk.Label(
+        parent,
+        text="Loading...",
+        font=label_font,
+        wraplength=550,
+    )
+    label.pack(pady=theme_config["padding"]["inner_pady"])
+    theme_manager.register(label, "label")
+    return label
+
+def create_action_button(parent, command):
+    button = ttk.Button(parent, text="Ask Me", command=command, style="TButton")
+    button.pack(pady=THEMES["light"]["padding"]["outer_pady"])
+    return button
+
+def create_theme_toggle_button(parent, theme_manager):
+    button = ttk.Button(parent, text="Toggle Theme", command=theme_manager.toggle_theme, style="TButton")
+    button.pack(side="bottom", pady=10)
+    return button
+
+def create_video_label(parent):
+    video_label = tk.Label(parent)
+    video_label.place(relx=0.5, rely=0.5, anchor="center")
+    return video_label
+
+# --- Business Logic (UNCHANGED) ---
+engine = pyttsx3.init()
+
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+
+def listen(status_label):
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening...")
+        try:
+            audio = recognizer.listen(source, timeout=5)
+            command = recognizer.recognize_google(audio)
+            print(f"You said: {command}")
+            status_label.config(text=f"You said: {command}")
+            return command.lower()
+        except sr.UnknownValueError:
+            speak("Sorry, I didn't understand that.")
+            status_label.config(text="Sorry, I didn't understand that.")
+            return None
+        except sr.WaitTimeoutError:
+            speak("No input detected.")
+            status_label.config(text="No input detected.")
+            return None
+
+def fetch_answer(question):
+    try:
+        connection = mysql.connector.connect(
+            host="localhost", user="root", password="", database="campus_bot"
+        )
+        cursor = connection.cursor()
+        query = "SELECT answer FROM faq WHERE question LIKE %s"
+        cursor.execute(query, (f"%{question}%",))
+        result = cursor.fetchone()
+        connection.close()
+        return result[0] if result else "Sorry, I don't have an answer for that."
+    except mysql.connector.Error as err:
+        return f"Database error: {err}"
+
+def process_voice_command(status_label, video_player):
+    query = listen(status_label)
+    if query:
+        if "thanks" in query or "exit" in query:
+            speak("Goodbye! See you soon!")
+            status_label.config(text="Goodbye! See you soon!")
+            root.quit()
+        else:
+            answer = fetch_answer(query)
+            speak(answer)
+            status_label.config(text=f"Q: {query.capitalize()}?\nA: {answer}")
+            video_player.play()
+
+def initial_greeting(status_label):
+    speak("Hello! I am your campus assistant. Ask me anything!")
+    status_label.config(text="Hello! I am your campus assistant. Ask me anything!")
+
+# --- Main Application Setup ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    
+    theme_manager = ThemeManager(root)
+    
+    setup_main_window(root, theme_manager)
+    content_frame = create_content_frame(root, theme_manager)
+    status_label = create_status_label(content_frame, theme_manager)
+    
+    video_label = create_video_label(content_frame)
+    video_player = VideoPlayer(video_label, "robot_video.mp4")
+
+    gif_label = tk.Label(content_frame)
+    gif_label.pack(pady=THEMES["light"]["padding"]["inner_pady"])
+    theme_manager.register(gif_label, "label")
+    animator = AnimatedGIF(gif_label, "robot_face.gif")
+    animator.start_animation()
+    
+    button = create_action_button(content_frame, lambda: process_voice_command(status_label, video_player))
+    
+    create_theme_toggle_button(root, theme_manager)
+    
+    theme_manager.apply_theme()
+    
+    root.after(2000, lambda: initial_greeting(status_label))
+    
+    root.mainloop()
