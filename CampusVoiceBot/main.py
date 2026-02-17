@@ -13,7 +13,7 @@ root = tk.Tk()
 root.title("Campus Voice Assistant")
 root.geometry("700x600")
 
-# Theme state and palettes.
+# Theme state and palettes..
 IS_DARK = False
 LIGHT_THEME = {
     "root_bg": "#ececec",
