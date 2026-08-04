@@ -4,7 +4,7 @@ import pyttsx3
 import speech_recognition as sr
 import mysql.connector
 from PIL import Image, ImageTk, ImageSequence
-import cv2
+
 
 # --- Constants for UI Styling ---
 THEMES = {
