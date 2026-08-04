@@ -31,7 +31,7 @@ import cv2
         },
         "padding": {"outer_padx": 20, "outer_pady": 20, "inner_pady": 10},
     },
-
+}
 
 # --- Theme Manager ---
 class ThemeManager:
