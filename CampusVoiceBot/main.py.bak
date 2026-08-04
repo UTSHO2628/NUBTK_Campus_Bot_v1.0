@@ -7,7 +7,6 @@ from PIL import Image, ImageTk, ImageSequence
 import cv2
 
 # --- Constants for UI Styling ---
-THEMES = {
     "light": {
         "font_family": "Helvetica",
         "font_sizes": {"title": 18, "body": 12, "button": 14},
