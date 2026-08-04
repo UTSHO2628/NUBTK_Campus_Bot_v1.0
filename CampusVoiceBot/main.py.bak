@@ -33,7 +33,6 @@ import cv2
     },
 }
 
-# --- Theme Manager ---
 class ThemeManager:
     def __init__(self, root):
         self.root = root
