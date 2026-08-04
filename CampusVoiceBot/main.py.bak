@@ -1,4 +1,4 @@
-
+import tkinter as tk
 from tkinter import font, ttk
 import pyttsx3
 import speech_recognition as sr
